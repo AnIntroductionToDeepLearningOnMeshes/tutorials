@@ -49,8 +49,8 @@ def get_flap_edges(F):
     flapEdges[e2].extend([e0,e1])
   return np.array(flapEdges), E
 
-trainFolder = '../datasets/meshMNIST_100V/12_meshMNIST/'
-labels = np.asarray(onp.loadtxt(trainFolder + 'labels.txt', delimiter=','), dtype=np.int16)
+trainFolder = '../datasets/meshMNIST_100V/12_meshMNIST/' # replace this with the path to the dataset folder
+labels = np.asarray(onp.loadtxt(trainFolder + 'labels.txt', delimiter=','), dtype=np.int16) # replace this with the path to the label file
 
 numMeshes = len(glob.glob(trainFolder + "*.obj"))
 meshList = [{} for sub in range(numMeshes)]
