@@ -1,0 +1,3 @@
+[submodule "jaxgptoolbox"]
+	path = jaxgptoolbox
+	url = https://github.com/ml-for-gp/jaxgptoolbox

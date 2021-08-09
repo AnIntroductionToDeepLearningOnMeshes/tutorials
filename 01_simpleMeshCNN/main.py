@@ -17,18 +17,23 @@ random.seed(0) # set random seed
 
 def compute_input(V,F,E,flap):
   # dihedral angles
-  FN = jgp.faceNormals(V,F)
-  E2F = jgp.adjacency_list_edge_face(F)
-  dotN = np.sum(FN[E2F[:,0],:] * FN[E2F[:,1],:], axis = 1).clip(-1, 1) # clip to avoid nan
-  dihedral_angles = (np.pi - np.arccos(dotN)) / np.pi
+  dihedral_angles, _ = jgp.dihedral_angles(V,F)
+  dihedral_angles = dihedral_angles / np.pi # normalize to 0 ~ 1
 
   # edge length ratios
+  #   / \
+  #  b   a
+  # /     \
+  # - e - -
+  # \     /
+  #  c   d
+  #   \ /
   Elen = np.sqrt(np.sum((V[E[:,0],:] - V[E[:,1],:])**2, axis = 1))
   nE = E.shape[0]
-  ratio_e_a = Elen[flap[:,0]] / Elen[np.arange(nE)] 
-  ratio_e_b = Elen[flap[:,1]] / Elen[np.arange(nE)] 
-  ratio_e_c = Elen[flap[:,2]] / Elen[np.arange(nE)] 
-  ratio_e_d = Elen[flap[:,3]] / Elen[np.arange(nE)] 
+  ratio_e_a = Elen[flap[:,0]] / Elen
+  ratio_e_b = Elen[flap[:,1]] / Elen
+  ratio_e_c = Elen[flap[:,2]] / Elen
+  ratio_e_d = Elen[flap[:,3]] / Elen
   ratio_features = np.stack((ratio_e_a, ratio_e_b, ratio_e_c, ratio_e_d), axis = 1)
   ratio_features = np.sort(ratio_features, axis = 1)
 
@@ -36,18 +41,6 @@ def compute_input(V,F,E,flap):
   dihedral_angles = np.expand_dims(dihedral_angles,1) 
   fE = np.concatenate((dihedral_angles,ratio_features), axis = 1) 
   return fE # fE.shape = (#edges, #channels)
-
-def get_flap_edges(F):
-  E, F2E = jgp.edges_with_mapping(F)
-  flapEdges = [[] for i in range(E.shape[0])]
-  for f in range(F.shape[0]):
-    e0 = F2E[f,0]
-    e1 = F2E[f,1]
-    e2 = F2E[f,2]
-    flapEdges[e0].extend([e1,e2])
-    flapEdges[e1].extend([e2,e0])
-    flapEdges[e2].extend([e0,e1])
-  return np.array(flapEdges), E
 
 trainFolder = '../datasets/meshMNIST_100V/12_meshMNIST/' # replace this with the path to the dataset folder
 labels = np.asarray(onp.loadtxt(trainFolder + 'labels.txt', delimiter=','), dtype=np.int16) # replace this with the path to the label file
@@ -60,7 +53,7 @@ for meshIdx in range(numMeshes):
     print(str(meshIdx) + "/" + str(numMeshes))
   meshName = str(meshIdx+1).zfill(4) + ".obj"
   V,F = jgp.readOBJ(trainFolder + meshName)
-  flap, E = get_flap_edges(F)
+  E, flap = jgp.edge_flaps(F)
   fE = compute_input(V,F,E,flap)
 
   meshList[meshIdx]["V"] = V
@@ -158,12 +151,11 @@ opt_state = opt_init(params)
 @jit
 def update(epoch, opt_state, input, label, flap):
   params = get_params(opt_state)
-  value, grads = value_and_grad(loss, argnums=0)(params, flap, input, label)
+  value, grads = value_and_grad(loss, argnums=0)(params, flap, input, label) # backpropagation 
   opt_state = opt_update(epoch, grads, opt_state)
   return value, opt_state
 
 numEpochs = 200
-bestLoss = np.inf
 for epoch in range(numEpochs):
   ts = time.time()
   loss_total = 0.0
@@ -175,10 +167,17 @@ for epoch in range(numEpochs):
     loss_total += lossVal
   loss_total /= numMeshes
 
-  if epoch % 1 == 0:
+  if epoch % 10 == 0:
     print("epoch %d, train loss %f, epoch time: %.7s sec" % (epoch, loss_total, time.time() - ts))
 
 NETPARAM = "params.pickle"
 params_final = get_params(opt_state)
 with open(NETPARAM, 'wb') as handle:
   pickle.dump(params_final, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+# testing
+params_final = get_params(opt_state)
+pred = forward(meshList[0]['fE'], params_final, meshList[0]['flap'])
+print("testing")
+print(pred)
